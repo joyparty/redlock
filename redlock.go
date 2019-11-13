@@ -11,9 +11,6 @@ import (
 )
 
 var (
-	// DefaultRetryDelay 多次重试直接的默认间隔时间
-	DefaultRetryDelay = 100 * time.Millisecond
-
 	defaultClient redis.Cmdable
 
 	// 尝试锁定的最长等待时间
@@ -61,7 +58,7 @@ func NewMutexFromClient(name string, ttl time.Duration, c redis.Cmdable) (*Mutex
 	}
 
 	return &Mutex{
-		RetryDelay: DefaultRetryDelay,
+		RetryDelay: 100 * time.Millisecond,
 
 		ttl:   ttl,
 		rc:    c,
