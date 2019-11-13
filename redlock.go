@@ -58,7 +58,9 @@ func NewMutexFromClient(name string, ttl time.Duration, c redis.Cmdable) (*Mutex
 	}
 
 	return &Mutex{
-		RetryDelay: 100 * time.Millisecond,
+		// 使用到TryLock的地方，一般都对时间延迟有一定容忍度
+		// 默认间隔可以稍微长一点，有需要可以自己修改这个值
+		RetryDelay: 1 * time.Second,
 
 		ttl:   ttl,
 		rc:    c,
