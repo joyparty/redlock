@@ -16,6 +16,9 @@ var (
 
 	defaultClient redis.Cmdable
 
+	// 尝试锁定的最长等待时间
+	tryLockTimeout = 10 * time.Minute
+
 	unlock = redis.NewScript(`
 if redis.call("get", KEYS[1]) == ARGV[1] then
 	return redis.call("del", KEYS[1])
@@ -28,8 +31,7 @@ if redis.call("get", KEYS[1]) == ARGV[1] then
 	return redis.call("pexpire", KEYS[1], ARGV[1])
 else
 	return 0
-end
-`)
+end`)
 )
 
 // Mutex 锁
@@ -75,7 +77,11 @@ func (mux Mutex) Lock() (bool, error) {
 }
 
 // TryLock 尝试锁定，会反复多次重试，直到超时
+// 超时时间最大允许10分钟
 func (mux Mutex) TryLock(ctx context.Context) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, tryLockTimeout)
+	defer cancel()
+
 	for {
 		select {
 		case <-ctx.Done():
