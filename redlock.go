@@ -70,14 +70,14 @@ func NewMutexFromClient(name string, ttl time.Duration, c redis.Cmdable) (*Mutex
 }
 
 // Lock 锁定，失败不会重试
-func (mux Mutex) Lock() (bool, error) {
+func (mux *Mutex) Lock() (bool, error) {
 	ok, err := mux.rc.SetNX(mux.name, mux.value, mux.ttl).Result()
 	return ok, errors.Wrapf(err, "lock %q", mux.name)
 }
 
 // TryLock 尝试锁定，会反复多次重试，直到超时
 // 超时时间最大允许10分钟
-func (mux Mutex) TryLock(ctx context.Context) (bool, error) {
+func (mux *Mutex) TryLock(ctx context.Context) (bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, tryLockTimeout)
 	defer cancel()
 
@@ -98,13 +98,13 @@ func (mux Mutex) TryLock(ctx context.Context) (bool, error) {
 }
 
 // Unlock 解除锁定
-func (mux Mutex) Unlock() (bool, error) {
+func (mux *Mutex) Unlock() (bool, error) {
 	ok, err := unlock.Run(mux.rc, []string{mux.name}, mux.value).Bool()
 	return ok, errors.Wrapf(err, "unlock %q", mux.name)
 }
 
 // Extend 延长锁过期时间，继续持有
-func (mux Mutex) Extend() (bool, error) {
+func (mux *Mutex) Extend() (bool, error) {
 	ok, err := extend.Run(mux.rc, []string{mux.name}, mux.ttl.Milliseconds()).Bool()
 	return ok, errors.Wrapf(err, "extend %q", mux.name)
 }
