@@ -84,8 +84,7 @@ func (mux Mutex) TryLock(ctx context.Context) (bool, error) {
 		case <-ctx.Done():
 			return false, errors.WithStack(ctx.Err())
 		default:
-			ok, err := mux.Lock()
-			if err != nil {
+			if ok, err := mux.Lock(); err != nil {
 				return false, err
 			} else if ok {
 				return true, nil
