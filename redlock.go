@@ -2,8 +2,10 @@
 package redlock
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis"
@@ -32,6 +34,12 @@ else
 	return 0
 end`)
 )
+
+// Result Mutext.Do()返回值类型
+type Result struct {
+	LockErr error
+	TaskErr error
+}
 
 // Mutex 锁
 type Mutex struct {
@@ -96,6 +104,54 @@ func (mux *Mutex) Extend() error {
 		return errors.WithStack(ErrLockExpired)
 	}
 	return nil
+}
+
+// Do 锁定后执行
+func (mux *Mutex) Do(task func(ctx context.Context) error) (result Result) {
+	result = Result{}
+	if err := mux.Lock(); err != nil {
+		result.LockErr = err
+		return
+	}
+
+	defer func() {
+		if result.LockErr == nil {
+			if err := mux.Unlock(); err != nil {
+				result.LockErr = err
+			}
+		}
+	}()
+
+	var cancelOnce sync.Once
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancelOnce.Do(cancel)
+
+	// 按照锁过期时间的一半，定时延长锁过期时间
+	go func() {
+		tk := time.NewTicker(mux.ttl / 2)
+		defer tk.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tk.C:
+				if err := mux.Extend(); err != nil {
+					result.LockErr = err
+					cancelOnce.Do(cancel)
+					return
+				}
+			}
+		}
+	}()
+
+	if err := task(ctx); err != nil {
+		result.TaskErr = err
+		cancelOnce.Do(cancel)
+		return
+	}
+
+	return
 }
 
 // SetDefaultClient 设置默认redis客户端
