@@ -2,7 +2,6 @@
 package redlock
 
 import (
-	"context"
 	"crypto/rand"
 	"time"
 
@@ -12,9 +11,6 @@ import (
 
 var (
 	defaultClient redis.Cmdable
-
-	// 尝试锁定的最长等待时间
-	tryLockTimeout = 10 * time.Minute
 
 	unlock = redis.NewScript(`
 if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -33,8 +29,6 @@ end`)
 
 // Mutex 锁
 type Mutex struct {
-	RetryDelay time.Duration // 多次重试之间的间隔时间
-
 	ttl   time.Duration // 锁记录的过期时长
 	rc    redis.Cmdable
 	name  string
@@ -58,10 +52,6 @@ func NewMutexFromClient(name string, ttl time.Duration, c redis.Cmdable) (*Mutex
 	}
 
 	return &Mutex{
-		// 使用到TryLock的地方，一般都对时间延迟有一定容忍度
-		// 默认间隔可以稍微长一点，有需要可以自己修改这个值
-		RetryDelay: 1 * time.Second,
-
 		ttl:   ttl,
 		rc:    c,
 		name:  name,
@@ -73,28 +63,6 @@ func NewMutexFromClient(name string, ttl time.Duration, c redis.Cmdable) (*Mutex
 func (mux *Mutex) Lock() (bool, error) {
 	ok, err := mux.rc.SetNX(mux.name, mux.value, mux.ttl).Result()
 	return ok, errors.Wrapf(err, "lock %q", mux.name)
-}
-
-// TryLock 尝试锁定，会反复多次重试，直到超时
-// 超时时间最大允许10分钟
-func (mux *Mutex) TryLock(ctx context.Context) (bool, error) {
-	ctx, cancel := context.WithTimeout(ctx, tryLockTimeout)
-	defer cancel()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return false, errors.WithStack(ctx.Err())
-		default:
-			if ok, err := mux.Lock(); err != nil {
-				return false, err
-			} else if ok {
-				return true, nil
-			}
-
-			time.Sleep(mux.RetryDelay)
-		}
-	}
 }
 
 // Unlock 解除锁定
