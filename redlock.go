@@ -41,6 +41,11 @@ type Result struct {
 	TaskErr error
 }
 
+// Success 任务是否完全成功
+func (r Result) Success() bool {
+	return r.LockErr == nil && r.TaskErr == nil
+}
+
 // Mutex 锁
 type Mutex struct {
 	ttl   time.Duration // 锁记录的过期时长
@@ -107,7 +112,7 @@ func (mux *Mutex) Extend() error {
 }
 
 // Do 锁定后执行
-func (mux *Mutex) Do(task func(ctx context.Context) error) (result Result) {
+func (mux *Mutex) Do(ctx context.Context, task func(ctx context.Context) error) (result Result) {
 	result = Result{}
 	if err := mux.Lock(); err != nil {
 		result.LockErr = err
@@ -123,7 +128,7 @@ func (mux *Mutex) Do(task func(ctx context.Context) error) (result Result) {
 	}()
 
 	var cancelOnce sync.Once
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancelOnce.Do(cancel)
 
 	// 按照锁过期时间的一半，定时延长锁过期时间
