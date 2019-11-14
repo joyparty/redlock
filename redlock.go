@@ -3,6 +3,7 @@ package redlock
 
 import (
 	"crypto/rand"
+	"fmt"
 	"time"
 
 	"github.com/go-redis/redis"
@@ -10,6 +11,11 @@ import (
 )
 
 var (
+	// ErrLockConflict 锁定冲突
+	ErrLockConflict = fmt.Errorf("lock conflict")
+	// ErrLockExpired 锁已过期不存在
+	ErrLockExpired = fmt.Errorf("lock expired")
+
 	defaultClient redis.Cmdable
 
 	unlock = redis.NewScript(`
@@ -60,21 +66,36 @@ func NewMutexFromClient(name string, ttl time.Duration, c redis.Cmdable) (*Mutex
 }
 
 // Lock 锁定，失败不会重试
-func (mux *Mutex) Lock() (bool, error) {
+func (mux *Mutex) Lock() error {
 	ok, err := mux.rc.SetNX(mux.name, mux.value, mux.ttl).Result()
-	return ok, errors.Wrapf(err, "lock %q", mux.name)
+	if err != nil {
+		return errors.WithStack(err)
+	} else if !ok {
+		return errors.WithStack(ErrLockConflict)
+	}
+	return nil
 }
 
 // Unlock 解除锁定
-func (mux *Mutex) Unlock() (bool, error) {
+func (mux *Mutex) Unlock() error {
 	ok, err := unlock.Run(mux.rc, []string{mux.name}, mux.value).Bool()
-	return ok, errors.Wrapf(err, "unlock %q", mux.name)
+	if err != nil {
+		return errors.WithStack(err)
+	} else if !ok {
+		return errors.WithStack(ErrLockExpired)
+	}
+	return nil
 }
 
 // Extend 延长锁过期时间，继续持有
-func (mux *Mutex) Extend() (bool, error) {
+func (mux *Mutex) Extend() error {
 	ok, err := extend.Run(mux.rc, []string{mux.name}, mux.ttl.Milliseconds()).Bool()
-	return ok, errors.Wrapf(err, "extend %q", mux.name)
+	if err != nil {
+		return errors.WithStack(err)
+	} else if !ok {
+		return errors.WithStack(ErrLockExpired)
+	}
+	return nil
 }
 
 // SetDefaultClient 设置默认redis客户端
