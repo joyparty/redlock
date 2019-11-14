@@ -29,7 +29,7 @@ end`)
 
 	extend = redis.NewScript(`
 if redis.call("get", KEYS[1]) == ARGV[1] then
-	return redis.call("pexpire", KEYS[1], ARGV[1])
+	return redis.call("pexpire", KEYS[1], ARGV[2])
 else
 	return 0
 end`)
@@ -102,7 +102,7 @@ func (mux *Mutex) Unlock() error {
 
 // Extend 延长锁过期时间，继续持有
 func (mux *Mutex) Extend() error {
-	ok, err := extend.Run(mux.rc, []string{mux.name}, mux.ttl.Milliseconds()).Bool()
+	ok, err := extend.Run(mux.rc, []string{mux.name}, mux.value, mux.ttl.Milliseconds()).Bool()
 	if err != nil {
 		return errors.WithStack(err)
 	} else if !ok {
