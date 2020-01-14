@@ -121,9 +121,7 @@ func (mux *Mutex) Do(ctx context.Context, task func(ctx context.Context) error) 
 
 	defer func() {
 		if result.LockErr == nil {
-			if err := mux.Unlock(); err != nil {
-				result.LockErr = err
-			}
+			result.LockErr = mux.Unlock()
 		}
 	}()
 
