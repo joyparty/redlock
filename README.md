@@ -10,7 +10,7 @@
 ```golang
 import (
 	"github.com/go-redis/redis"
-	"gitlab.haochang.tv/gopkg/redlock"
+	"github.com/joyparty/redlock"
 )
 
 name := "..." // 锁名字，每把锁应该有唯一的名字，名字相同的锁会互斥
