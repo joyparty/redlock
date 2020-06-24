@@ -28,38 +28,27 @@ mux, err := redlock.NewMutexFromClient(name, ttl, client)
 
 锁定
 ```golang
-import "github.com/pkg/errors"
-
-err := mux.Lock()
-if cause := errors.Cause(err); cause == redlock.ErrLockConflict {
+if err := mux.Lock(); errors.Is(err, redlock.ErrLockConflict) {
 	fmt.Println("已经被锁定了")
 }
 ```
 
 解锁
 ```golang
-import "github.com/pkg/errors"
-
-err := mux.Unlock()
-if cause := errors.Cause(err); cause == redlock.ErrLockExpired {
+if err := mux.Unlock(); errors.Is(err, redlock.ErrLockExpired) {
 	fmt.Println("锁记录过期或不存在")
 }
 ```
 
 延长锁的过期时间，延长的时间使用创建锁的ttl参数值
 ```golang
-import "github.com/pkg/errors"
-
-err := mux.Extend()
-if cause := errors.Cause(err); cause == redlock.ErrLockExpired {
+if err := mux.Extend(); errors.Is(err, redlock.ErrLockExpired) {
 	fmt.Println("锁记录过期或不存在")
 }
 ```
 
 锁定并执行
 ```golang
-import "github.com/pkg/errors"
-
 result := mux.Do(context.TODO(), func(ctx context.Context) error {
 	// ...
 })
@@ -67,15 +56,15 @@ result := mux.Do(context.TODO(), func(ctx context.Context) error {
 if result.Success() {
 	fmt.Println("执行成功")
 } else if result.LockErr != nil {
-	if cause := errors.Cause(result.LockErr); cause == redlock.ErrLockConflict {
+	if errors.Is(result.LockErr, redlock.ErrLockConflict) {
 		fmt.Println("锁定失败")
-	} else if cause == redlock.ErrLockExpired {
+	} else if errors.Is(err, redlock.ErrLockExpired) {
 		fmt.Println("锁记录过期或不存在")
 	} else {
 		fmt.Printf("其它错误 %s\n", result.LockErr)
 	}
 } else if result.TaskErr != nil {
-	if cause := errors.Cause(result.TaskErr); cause == context.Canceled {
+	if errors.Is(result.TaskErr, context.Canceled) {
 		fmt.Println("context canceled")
 	} else {
 		fmt.Printf("其它错误 %s\n", result.TaskErr)
