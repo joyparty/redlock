@@ -4,19 +4,19 @@ package redlock
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/go-redis/redis"
-	"github.com/pkg/errors"
 )
 
 var (
 	// ErrLockConflict 锁定冲突
 	ErrLockConflict = fmt.Errorf("lock conflict")
 	// ErrLockExpired 锁已过期不存在
-	ErrLockExpired = fmt.Errorf("lock expired")
+	ErrLockExpired = fmt.Errorf("lock not exist or expired")
 
 	defaultClient redis.Cmdable
 
@@ -57,7 +57,7 @@ type Mutex struct {
 // NewMutex 新建锁对象
 func NewMutex(name string, ttl time.Duration) (*Mutex, error) {
 	if defaultClient == nil {
-		return nil, errors.New("use SetDefaultClient() set redis client")
+		return nil, errors.New("call SetDefaultClient() set redis client")
 	}
 
 	return NewMutexFromClient(name, ttl, defaultClient)
@@ -67,7 +67,7 @@ func NewMutex(name string, ttl time.Duration) (*Mutex, error) {
 func NewMutexFromClient(name string, ttl time.Duration, c redis.Cmdable) (*Mutex, error) {
 	value := make([]byte, 16)
 	if _, err := rand.Read(value); err != nil {
-		return nil, errors.WithStack(err)
+		return nil, fmt.Errorf("generate random value, %w", err)
 	}
 
 	return &Mutex{
@@ -82,9 +82,9 @@ func NewMutexFromClient(name string, ttl time.Duration, c redis.Cmdable) (*Mutex
 func (mux *Mutex) Lock() error {
 	ok, err := mux.rc.SetNX(mux.name, mux.value, mux.ttl).Result()
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	} else if !ok {
-		return errors.WithStack(ErrLockConflict)
+		return ErrLockConflict
 	}
 	return nil
 }
@@ -93,9 +93,9 @@ func (mux *Mutex) Lock() error {
 func (mux *Mutex) Unlock() error {
 	ok, err := unlock.Run(mux.rc, []string{mux.name}, mux.value).Bool()
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	} else if !ok {
-		return errors.WithStack(ErrLockExpired)
+		return ErrLockExpired
 	}
 	return nil
 }
@@ -104,9 +104,9 @@ func (mux *Mutex) Unlock() error {
 func (mux *Mutex) Extend() error {
 	ok, err := extend.Run(mux.rc, []string{mux.name}, mux.value, mux.ttl.Milliseconds()).Bool()
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	} else if !ok {
-		return errors.WithStack(ErrLockExpired)
+		return ErrLockExpired
 	}
 	return nil
 }
