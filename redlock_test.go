@@ -99,7 +99,7 @@ func (s *LockSuite) TestDoOnce() {
 	mux1, _ := NewMutexFromClient(key, 3*time.Second, s.client)
 	r1 := mux1.Do(context.Background(), task)
 
-	s.Require().True(r1.Success())
+	s.Require().Nil(r1.Err())
 	s.Require().Equal(int64(1), n, "task run more than once")
 }
 

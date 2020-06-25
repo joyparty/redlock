@@ -49,25 +49,17 @@ if err := mux.Extend(); errors.Is(err, redlock.ErrLockExpired) {
 
 锁定并执行
 ```golang
-result := mux.Do(context.TODO(), func(ctx context.Context) error {
-	// ...
-})
+var task func(ctx context.Context) error
 
-if result.Success() {
-	fmt.Println("执行成功")
-} else if result.LockErr != nil {
-	if errors.Is(result.LockErr, redlock.ErrLockConflict) {
+if err := mux.Do(context.TODO(), task).Err(); err != nil {
+	if errors.Is(err, redlock.ErrLockConflict) {
 		fmt.Println("锁定失败")
 	} else if errors.Is(err, redlock.ErrLockExpired) {
 		fmt.Println("锁记录过期或不存在")
-	} else {
-		fmt.Printf("其它错误 %s\n", result.LockErr)
-	}
-} else if result.TaskErr != nil {
-	if errors.Is(result.TaskErr, context.Canceled) {
+	} else if errors.Is(err, context.Canceled) {
 		fmt.Println("context canceled")
 	} else {
-		fmt.Printf("其它错误 %s\n", result.TaskErr)
+		fmt.Printf("其它错误 %s\n", err)
 	}
 }
 ```

@@ -41,9 +41,12 @@ type Result struct {
 	TaskErr error
 }
 
-// Success 任务是否完全成功
-func (r Result) Success() bool {
-	return r.LockErr == nil && r.TaskErr == nil
+// Err 获取错误
+func (r Result) Err() error {
+	if err := r.TaskErr; err != nil {
+		return err
+	}
+	return r.LockErr
 }
 
 // Mutex 锁
