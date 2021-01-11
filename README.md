@@ -28,7 +28,7 @@ mux, err := redlock.NewMutexFromClient(name, ttl, client)
 
 锁定
 ```golang
-if err := mux.Lock(); err == redlock.ErrLockConflict {
+if err := mux.Lock(context.TODO()); err == redlock.ErrLockConflict {
 	fmt.Println("已经被锁定了")
 } else if err != nil {
 	fmt.Println(err)
@@ -37,7 +37,7 @@ if err := mux.Lock(); err == redlock.ErrLockConflict {
 
 解锁
 ```golang
-if err := mux.Unlock(); err == redlock.ErrLockExpired {
+if err := mux.Unlock(context.TODO()); err == redlock.ErrLockExpired {
 	fmt.Println("锁记录过期或不存在")
 } else if err != nil {
 	fmt.Println(err)
@@ -46,7 +46,7 @@ if err := mux.Unlock(); err == redlock.ErrLockExpired {
 
 延长锁的过期时间，延长的时间使用创建锁的ttl参数值
 ```golang
-if err := mux.Extend(); err == redlock.ErrLockExpired {
+if err := mux.Extend(context.TODO()); err == redlock.ErrLockExpired {
 	fmt.Println("锁记录过期或不存在")
 } else if err != nil {
 	fmt.Println(err)
