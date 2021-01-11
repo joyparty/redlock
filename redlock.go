@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 )
 
 var (
@@ -82,8 +82,8 @@ func NewMutexFromClient(name string, ttl time.Duration, c redis.Cmdable) (*Mutex
 }
 
 // Lock 锁定，失败不会重试
-func (mux *Mutex) Lock() error {
-	ok, err := mux.rc.SetNX(mux.name, mux.value, mux.ttl).Result()
+func (mux *Mutex) Lock(ctx context.Context) error {
+	ok, err := mux.rc.SetNX(ctx, mux.name, mux.value, mux.ttl).Result()
 	if err != nil {
 		return err
 	} else if !ok {
@@ -93,8 +93,8 @@ func (mux *Mutex) Lock() error {
 }
 
 // Unlock 解除锁定
-func (mux *Mutex) Unlock() error {
-	ok, err := unlock.Run(mux.rc, []string{mux.name}, mux.value).Bool()
+func (mux *Mutex) Unlock(ctx context.Context) error {
+	ok, err := unlock.Run(ctx, mux.rc, []string{mux.name}, mux.value).Bool()
 	if err != nil {
 		return err
 	} else if !ok {
@@ -104,8 +104,8 @@ func (mux *Mutex) Unlock() error {
 }
 
 // Extend 延长锁过期时间，继续持有
-func (mux *Mutex) Extend() error {
-	ok, err := extend.Run(mux.rc, []string{mux.name}, mux.value, mux.ttl.Milliseconds()).Bool()
+func (mux *Mutex) Extend(ctx context.Context) error {
+	ok, err := extend.Run(ctx, mux.rc, []string{mux.name}, mux.value, mux.ttl.Milliseconds()).Bool()
 	if err != nil {
 		return err
 	} else if !ok {
@@ -117,14 +117,19 @@ func (mux *Mutex) Extend() error {
 // Do 锁定后执行
 func (mux *Mutex) Do(ctx context.Context, task func(ctx context.Context) error) (result Result) {
 	result = Result{}
-	if err := mux.Lock(); err != nil {
+	if err := mux.Lock(ctx); err != nil {
 		result.LockErr = err
 		return
 	}
 
 	defer func() {
 		if result.LockErr == nil {
-			result.LockErr = mux.Unlock()
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+
+			if err := mux.Unlock(ctx); err != nil {
+				result.LockErr = fmt.Errorf("unlock, %w", err)
+			}
 		}
 	}()
 
@@ -142,8 +147,8 @@ func (mux *Mutex) Do(ctx context.Context, task func(ctx context.Context) error) 
 			case <-ctx.Done():
 				return
 			case <-tk.C:
-				if err := mux.Extend(); err != nil {
-					result.LockErr = err
+				if err := mux.Extend(ctx); err != nil {
+					result.LockErr = fmt.Errorf("extend, %w", err)
 					cancelOnce.Do(cancel)
 					return
 				}

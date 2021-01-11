@@ -2,12 +2,13 @@ package redlock
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -22,7 +23,7 @@ func (s *LockSuite) SetupSuite() {
 		DialTimeout: 2 * time.Second,
 	})
 
-	if err := c.Ping().Err(); err != nil {
+	if err := c.Ping(context.Background()).Err(); err != nil {
 		s.Fail("redis connect failed")
 	}
 	s.client = c
@@ -34,46 +35,46 @@ func (s *LockSuite) TearDownSuite() {
 
 func (s *LockSuite) TestConflict() {
 	key := "test:redlock:conflict"
-	s.client.Del(key) // 先清除一次
+	s.client.Del(context.Background(), key) // 先清除一次
 
 	mux1, err := NewMutexFromClient(key, 3*time.Second, s.client)
 	s.Require().NoError(err)
 
-	s.Require().NoError(mux1.Lock(), "mux1.Lock()")
+	s.Require().NoError(mux1.Lock(context.Background()), "mux1.Lock()")
 
 	mux2, err := NewMutexFromClient(key, 3*time.Second, s.client)
 	s.Require().NoError(err)
 
-	err = mux2.Lock()
+	err = mux2.Lock(context.Background())
 	s.Require().EqualError(err, ErrLockConflict.Error(), "mux2.Lock()")
 
-	s.Require().NoError(mux1.Unlock(), "mux1.Unlock()")
+	s.Require().NoError(mux1.Unlock(context.Background()), "mux1.Unlock()")
 
-	s.Require().NoError(mux2.Lock(), "mux2.Lock()")
-	s.Require().NoError(mux2.Unlock(), "mux2.Unlock()")
+	s.Require().NoError(mux2.Lock(context.Background()), "mux2.Lock()")
+	s.Require().NoError(mux2.Unlock(context.Background()), "mux2.Unlock()")
 }
 
 func (s *LockSuite) TestExpiration() {
 	key := "test:redlock:expiration"
-	s.client.Del(key) // 先清除一次
+	s.client.Del(context.Background(), key) // 先清除一次
 
 	mux, err := NewMutexFromClient(key, 200*time.Millisecond, s.client)
 	s.Require().NoError(err)
 
-	s.Require().NoError(mux.Lock(), "mux.Lock()")
+	s.Require().NoError(mux.Lock(context.Background()), "mux.Lock()")
 
 	time.Sleep(100 * time.Millisecond)
-	s.Require().NoError(mux.Extend(), "mux.Extend()")
+	s.Require().NoError(mux.Extend(context.Background()), "mux.Extend()")
 
 	time.Sleep(300 * time.Millisecond)
-	s.Require().EqualError(mux.Extend(), ErrLockExpired.Error(), "mux.Extend()")
+	s.Require().EqualError(mux.Extend(context.Background()), ErrLockExpired.Error(), "mux.Extend()")
 
-	s.Require().EqualError(mux.Unlock(), ErrLockExpired.Error(), "mux.Unlock()")
+	s.Require().EqualError(mux.Unlock(context.Background()), ErrLockExpired.Error(), "mux.Unlock()")
 }
 
 func (s *LockSuite) TestDoOnce() {
 	key := "test:redlock:do:once"
-	s.client.Del(key) // 先清除一次
+	s.client.Del(context.Background(), key) // 先清除一次
 
 	var n int64
 	task := func(ctx context.Context) error {
@@ -86,14 +87,14 @@ func (s *LockSuite) TestDoOnce() {
 		mux2, _ := NewMutexFromClient(key, 3*time.Second, s.client)
 		time.Sleep(100 * time.Millisecond)
 		r2 := mux2.Do(context.Background(), task)
-		s.Require().EqualError(r2.LockErr, ErrLockConflict.Error(), "mux2.Do")
+		s.Require().Truef(errors.Is(r2.LockErr, ErrLockConflict), "mux2.Do")
 	}()
 
 	go func() {
 		mux3, _ := NewMutexFromClient(key, 3*time.Second, s.client)
 		time.Sleep(200 * time.Millisecond)
 		r3 := mux3.Do(context.Background(), task)
-		s.Require().EqualError(r3.LockErr, ErrLockConflict.Error(), "mux2.Do")
+		s.Require().Truef(errors.Is(r3.LockErr, ErrLockConflict), "mux2.Do")
 	}()
 
 	mux1, _ := NewMutexFromClient(key, 3*time.Second, s.client)
@@ -105,7 +106,7 @@ func (s *LockSuite) TestDoOnce() {
 
 func (s *LockSuite) TestDoCancel() {
 	key := "test:redlock:do:cancel"
-	s.client.Del(key) // 先清除一次
+	s.client.Del(context.Background(), key) // 先清除一次
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -128,11 +129,11 @@ func (s *LockSuite) TestDoCancel() {
 
 func (s *LockSuite) TestDoExpired() {
 	key := "test:redlock:do:expired"
-	s.client.Del(key) // 先清除一次
+	s.client.Del(context.Background(), key) // 先清除一次
 
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		s.client.Del(key) // del lock
+		s.client.Del(context.Background(), key) // del lock
 	}()
 
 	mux, _ := NewMutexFromClient(key, 1*time.Second, s.client)
@@ -141,13 +142,13 @@ func (s *LockSuite) TestDoExpired() {
 		return ctx.Err()
 	})
 
-	s.Require().EqualError(r.LockErr, ErrLockExpired.Error())
-	s.Require().EqualError(r.TaskErr, context.Canceled.Error())
+	s.Require().True(errors.Is(r.LockErr, ErrLockExpired))
+	s.Require().True(errors.Is(r.TaskErr, context.Canceled))
 }
 
 func (s *LockSuite) TestDoError() {
 	key := "test:redlock:do:error"
-	s.client.Del(key) // 先清除一次
+	s.client.Del(context.Background(), key) // 先清除一次
 
 	myErr := fmt.Errorf("test do error")
 	mux, _ := NewMutexFromClient(key, 1*time.Second, s.client)
