@@ -1,5 +1,7 @@
 # RedLock
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/joyparty/redlock.svg)](https://pkg.go.dev/github.com/joyparty/redlock)
+
 根据 https://redis.io/topics/distlock 实现的分布式锁
 
 没有实现多redis节点的增强版本，仅仅实现了单redis节点的方式
