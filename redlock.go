@@ -117,7 +117,10 @@ func (mux *Mutex) Extend(ctx context.Context) error {
 // Do 锁定后执行
 func (mux *Mutex) Do(ctx context.Context, task func(ctx context.Context) error) (result Result) {
 	result = Result{}
-	if err := mux.Lock(ctx); err != nil {
+
+	lockCtx, lockCancel := context.WithTimeout(ctx, 3*time.Second)
+	defer lockCancel()
+	if err := mux.Lock(lockCtx); err != nil {
 		result.LockErr = err
 		return
 	}
