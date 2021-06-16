@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -133,9 +132,8 @@ func (mux *Mutex) Do(ctx context.Context, task func(ctx context.Context) error) 
 		}
 	}()
 
-	var cancelOnce sync.Once
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancelOnce.Do(cancel)
+	defer cancel()
 
 	// 按照锁过期时间的一半，定时延长锁过期时间
 	go func() {
@@ -149,7 +147,7 @@ func (mux *Mutex) Do(ctx context.Context, task func(ctx context.Context) error) 
 			case <-tk.C:
 				if err := mux.Extend(ctx); err != nil {
 					result.LockErr = fmt.Errorf("extend, %w", err)
-					cancelOnce.Do(cancel)
+					cancel()
 					return
 				}
 			}
@@ -158,7 +156,7 @@ func (mux *Mutex) Do(ctx context.Context, task func(ctx context.Context) error) 
 
 	if err := task(ctx); err != nil {
 		result.TaskErr = err
-		cancelOnce.Do(cancel)
+		cancel()
 		return
 	}
 
