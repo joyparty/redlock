@@ -42,12 +42,17 @@ type Result struct {
 
 // LockErr
 type LockErr struct {
-	msg string
+	err error
 }
 
 // Error 接口实现
 func (l LockErr) Error() string {
-	return l.msg
+	return l.err.Error()
+}
+
+// Err 真实的错误信息
+func (l LockErr) Err() error {
+	return l.err
 }
 
 // Err 获取错误
@@ -56,7 +61,7 @@ func (r Result) Err() error {
 		return err
 	}
 	if r.LockErr != nil {
-		return LockErr{msg: r.LockErr.Error()}
+		return LockErr{err: r.LockErr}
 	}
 	return nil
 }
