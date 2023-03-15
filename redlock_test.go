@@ -160,6 +160,21 @@ func (s *LockSuite) TestDoError() {
 	s.Require().EqualError(r.TaskErr, myErr.Error())
 }
 
+func TestDoResult(t *testing.T) {
+	key := "test:redlock:do:lock:err"
+	mux, _ := NewMutexFromClient(key, 3*time.Second, redis.NewClient(&redis.Options{
+		Addr:        "127.0.0.1:632",
+		DialTimeout: 2 * time.Second,
+	}))
+	r := mux.Do(context.Background(), func(ctx context.Context) error {
+		return nil
+	})
+
+	if !errors.As(r.Err(), &LockErr{}) {
+		t.Errorf("err is LockErr, actual is %T", r.Err())
+	}
+}
+
 func TestLockSuite(t *testing.T) {
 	suite.Run(t, &LockSuite{})
 }

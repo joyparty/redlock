@@ -40,12 +40,25 @@ type Result struct {
 	TaskErr error
 }
 
+// LockErr
+type LockErr struct {
+	msg string
+}
+
+// Error 接口实现
+func (l LockErr) Error() string {
+	return l.msg
+}
+
 // Err 获取错误
 func (r Result) Err() error {
 	if err := r.TaskErr; err != nil {
 		return err
 	}
-	return r.LockErr
+	if r.LockErr != nil {
+		return LockErr{msg: r.LockErr.Error()}
+	}
+	return nil
 }
 
 // Mutex 锁
